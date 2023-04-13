@@ -109,50 +109,52 @@
                 player.initialize(video, url, true);
                 var controlbar = new ControlBar(player);
                 controlbar.initialize();
+                controlbar.setVolume(parseFloat(localStorage.getItem("volume")));
+
                 player.updateSettings({
                     streaming: {
-                          delay: {
-                            liveDelay: 2,
-                            useSuggestedPresentationDelay: false
-                         },
-                         liveCatchup: {
-                            maxDrift: 0,
-                            playbackRate: {
-                                min: -0.02,
-                                max: 0.02
-                            },
-                            enabled: true,
-                            mode: "liveCatchupModeDefault"
-                          }
+                        delay: {
+                            useSuggestedPresentationDelay: false,
+                            liveDelay: 2
+                        },
+                        liveCatchup: {
+                        maxDrift: 0,
+                        playbackRate: {
+                            min: -0.02,
+                            max: 0.02
+                        },
+                        enabled: true,
+                        mode: "liveCatchupModeDefault"
+                        }
                     }
+                });
+
+                function targetDelayAdjust(d) {
+                    var delay = player.getTargetLiveDelay() + d;
+                    if (delay < 1 || delay > 15) {return;};
+                    player.updateSettings({streaming: {delay: {liveDelay: delay }}});
+                };
+                document.getElementById('targetDelayIncBtn').addEventListener('click', () => {
+                    targetDelayAdjust(1);
+                });
+                document.getElementById('targetDelayDecBtn').addEventListener('click', () => {
+                    targetDelayAdjust(-1);
                 });
 
                 player.on(dashjs.MediaPlayer.events.PLAYBACK_NOT_ALLOWED, function (data) {
                     console.log('Playback did not start due to auto play restrictions. Muting audio and reloading');
-                    video.muted = true;
+                    controlbar.setVolume(0);
                     player.initialize(video, url, true);
-
                 });
 
-                //function targetDelayAdjust(d) {
-                //    console.log(d);
-                //    console.log(player.getTargetLiveDelay());
-                //    var delay = player.getTargetLiveDelay() + d;
-                //    console.log(delay);
-                //    player.updateSettings({streaming: {delay: {liveDelay: delay }}});
-                //};
-                //document.getElementById('targetDelayIncBtn').addEventListener('click',targetDelayAdjust(1));
-                //document.getElementById('targetDelayDecBtn').addEventListener('click',targetDelayAdjust(-1));
-                document.getElementById('targetDelayIncBtn').addEventListener('click', () => {
-                    player.updateSettings({streaming: {delay: {liveDelay: player.getTargetLiveDelay() + 1 }}});
-                });
-                document.getElementById('targetDelayDecBtn').addEventListener('click', () => {
-                    player.updateSettings({streaming: {delay: {liveDelay: player.getTargetLiveDelay() + -1 }}});
+                player.on(dashjs.MediaPlayer.events["PLAYBACK_SEEKED"], function () {
+                    // On seeks the target delay borks, reset it
+                    targetDelayAdjust(0);
                 });
 
-
-
-
+                player.on(dashjs.MediaPlayer.events["PLAYBACK_VOLUME_CHANGED"], function () {
+                    localStorage.setItem("volume", player.getVolume());
+                });
 
                 player.on(dashjs.MediaPlayer.events["PLAYBACK_ENDED"], function () {
                     clearInterval(eventPoller);
@@ -192,7 +194,7 @@
                         document.getElementById('reportedBitrate').innerText = bitrate + " Kbps";
                         document.getElementById('resolution').innerText = resolution;
                     }
-                }, 200);
+                }, 250);
 
                 if (video.webkitVideoDecodedByteCount !== undefined) {
                     var lastDecodedByteCount = 0;
