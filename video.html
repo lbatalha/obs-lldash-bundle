@@ -14,6 +14,7 @@
             .metrics {
                 color: #F8F8F2;
                 font-family: monospace;
+                max-width: 40%;
             }
         </style>
         <link rel="stylesheet" href="controlbar.css">
@@ -60,9 +61,21 @@
 
             <br>
             <strong>Buffer level:</strong>
-            <span id="bufferLevel">0 secs</span>
+            <span id="bufferLevel">0s</span>
             <br>
-            <span id="DVRInfo">N/A</span>
+            <strong>Latency:</strong>
+            <span id="latency">0s</span>
+            <br>
+            <strong>Target Latency:</strong>
+            <button id="targetDelayDecBtn">-</button>
+            <span id="targetDelay">0s</span>
+            <button id="targetDelayIncBtn">+</button>
+
+            <br>
+            <strong>Playback Rate:</strong>
+            <span id="playbackRate">0 %</span>
+            <br>
+
 
             <br><br>
             <strong>Codec:</strong>
@@ -86,18 +99,21 @@
 
         </div>
 
-        <script src="dash.all.min.js"></script>
+        <script src="dash.all.debug.js"></script>
         <script src="ControlBar.js"></script>
         <script>
             (function(){
                 var url = "manifest.mpd";
                 var player = dashjs.MediaPlayer().create();
                 var video = document.querySelector(".videoContainer video");
-
+                player.initialize(video, url, true);
+                var controlbar = new ControlBar(player);
+                controlbar.initialize();
                 player.updateSettings({
                     streaming: {
                           delay: {
-                            useSuggestedPresentationDelay: true
+                            liveDelay: 2,
+                            useSuggestedPresentationDelay: false
                          },
                          liveCatchup: {
                             maxDrift: 0,
@@ -105,7 +121,6 @@
                                 min: -0.02,
                                 max: 0.02
                             },
-                            playbackBufferMin: 0.5,
                             enabled: true,
                             mode: "liveCatchupModeDefault"
                           }
@@ -119,10 +134,23 @@
 
                 });
 
-                player.initialize(video, url, true);
+                //function targetDelayAdjust(d) {
+                //    console.log(d);
+                //    console.log(player.getTargetLiveDelay());
+                //    var delay = player.getTargetLiveDelay() + d;
+                //    console.log(delay);
+                //    player.updateSettings({streaming: {delay: {liveDelay: delay }}});
+                //};
+                //document.getElementById('targetDelayIncBtn').addEventListener('click',targetDelayAdjust(1));
+                //document.getElementById('targetDelayDecBtn').addEventListener('click',targetDelayAdjust(-1));
+                document.getElementById('targetDelayIncBtn').addEventListener('click', () => {
+                    player.updateSettings({streaming: {delay: {liveDelay: player.getTargetLiveDelay() + 1 }}});
+                });
+                document.getElementById('targetDelayDecBtn').addEventListener('click', () => {
+                    player.updateSettings({streaming: {delay: {liveDelay: player.getTargetLiveDelay() + -1 }}});
+                });
 
-                var controlbar = new ControlBar(player, true);
-                controlbar.initialize();
+
 
 
 
@@ -139,22 +167,28 @@
                     if (dashMetrics && streamInfo) {
                         const periodIdx = streamInfo.index;
                         var repSwitch = dashMetrics.getCurrentRepresentationSwitch('video', true);
-                        var bufferLevel = dashMetrics.getCurrentBufferLevel('video', true);
-                        var DVRInfo = dashMetrics.getCurrentDVRInfo('video', true);
-                        var droppedFrames = dashMetrics.getCurrentDroppedFrames();
+                        var bufferLevel = dashMetrics.getCurrentBufferLevel('video', true).toFixed(3);
+                        var latency = player.getCurrentLiveLatency().toFixed(3);
+
+                        var targetDelay = player.getTargetLiveDelay().toFixed(3);
+                        var droppedFrames = dashMetrics.getCurrentDroppedFrames()["droppedFrames"];
                         var bitrate = repSwitch ? Math.round(dashAdapter.getBandwidthForRepresentation(repSwitch.to, periodIdx) / 1000) : NaN;
                         var adaptation = dashAdapter.getAdaptationForType(periodIdx, 'video', streamInfo);
                         var currentRep = adaptation.Representation_asArray.find(function (rep) {
                             return rep.id === repSwitch.to
                         })
                         var frameRate = currentRep.frameRate;
+                        var playbackRate = (player.getPlaybackRate()*100).toFixed(1);
                         var resolution = currentRep.width + 'x' + currentRep.height;
                         var codec = dashAdapter.getCodec(adaptation, currentRep, false);
-                        document.getElementById('bufferLevel').innerText = bufferLevel + " secs";
-                        document.getElementById('DVRInfo').innerText = JSON.stringify(DVRInfo);
+
+                        document.getElementById('bufferLevel').innerText = bufferLevel + "s";
+                        document.getElementById('latency').innerText =  latency + "s";
+                        document.getElementById('targetDelay').innerText = targetDelay + "s";
                         document.getElementById('codec').innerText = codec;
                         document.getElementById('framerate').innerText = frameRate + " fps";
-                        document.getElementById('droppedFrames').innerText = droppedFrames["droppedFrames"];
+                        document.getElementById('playbackRate').innerText = playbackRate + " %";
+                        document.getElementById('droppedFrames').innerText = droppedFrames;
                         document.getElementById('reportedBitrate').innerText = bitrate + " Kbps";
                         document.getElementById('resolution').innerText = resolution;
                     }
