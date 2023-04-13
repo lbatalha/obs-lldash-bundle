@@ -1,7 +1,9 @@
 #!/bin/env sh
 
-LISTEN_ADDR=rtmp://127.0.0.1:1935/live/app
-UTC_ADDR=http://127.0.0.1:61935/utc_timestamp
+#LISTEN_ADDR=rtmp://localhost:1935/live/app
+#UTC_ADDR=http://localhost:61935/utc_timestamp
+
+
 
 mkdir -p /tmp/dashstream
 
@@ -14,7 +16,7 @@ docker run --name nginx \
 --mount type=bind,src=/tmp/dashstream,dst=/usr/share/nginx/html,readonly \
 --mount type=bind,src=/opt/dashstream/nginx.conf,dst=/etc/nginx/nginx.conf,readonly \
 --mount type=bind,src=/opt/dashstream/default.conf,dst=/etc/nginx/conf.d/default.conf,readonly \
--p 61935:80 --rm -d \
+-p 0.0.0.0:61935:80 --rm -d \
 nginxinc/nginx-unprivileged
 
 ffmpeg -f flv -listen 1 -i "$LISTEN_ADDR" \

@@ -1,29 +1,25 @@
 <!doctype html>
 <html>
     <head>
-        <title>derpy streaming</title>
+        <meta charset="utf-8">
+        <title>derpy streams</title>
         <style>
+            body {
+                background-color: #282634;
+            }
             video {
                 max-width: 100%;
+                max-height: 100%;
+            }
+            .metrics {
+                color: #F8F8F2;
+                font-family: monospace;
             }
         </style>
+        <link rel="stylesheet" href="controlbar.css">
     </head>
     <body>
-        <script src="dash.all.min.js"></script>
-        <link rel="stylesheet" href="controlbar.css">
-        <script src="ControlBar.js"></script>
-        <script>
-            function init() {
-                var url = 'manifest.mpd';
-                var videoElement = document.querySelector('.videoContainer video');
-                var player = dashjs.MediaPlayer().create();
-
-                player.initialize(videoElement, url, true);
-                var controlbar = new ControlBar(player);
-                controlbar.initialize();
-            }
-        </script>
-        <div class="dash-video-player ">
+        <div class="dash-video-player">
             <div class="videoContainer" id="videoContainer">
                 <video preload="auto" autoplay=""></video>
                 <div id="videoController" class="video-controller unselectable">
@@ -57,5 +53,125 @@
                 </div>
             </div>
         </div>
+
+
+        <div class="metrics">
+            <h4>Metrics</h4>
+
+            <br>
+            <strong>Buffer level:</strong>
+            <span id="bufferLevel">0 secs</span>
+            <br>
+            <span id="DVRInfo">N/A</span>
+
+            <br><br>
+            <strong>Codec:</strong>
+            <span id="codec">N/A</span>
+            <br>
+            <strong>Resolution:</strong>
+            <span id="resolution">0x0</span>
+            <strong>Framerate:</strong>
+            <span id="framerate">0 fps</span>
+            <br>
+            <strong>Reported bitrate:</strong>
+            <span id="reportedBitrate">0 Kbps</span>
+            <div id="chrome-only" style="display: none;">
+                <strong>Calculated bitrate:</strong>
+                <span id="calculatedBitrate"></span>
+            </div>
+            <br>
+            <strong>Dropped Frames:</strong>
+            <span id="droppedFrames">0</span>
+            <br>
+
+        </div>
+
+        <script src="dash.all.min.js"></script>
+        <script src="ControlBar.js"></script>
+        <script>
+            (function(){
+                var url = "manifest.mpd";
+                var player = dashjs.MediaPlayer().create();
+                var video = document.querySelector(".videoContainer video");
+
+                player.updateSettings({
+                    streaming: {
+                          delay: {
+                            useSuggestedPresentationDelay: true
+                         },
+                         liveCatchup: {
+                            maxDrift: 0,
+                            playbackRate: {
+                                min: -0.02,
+                                max: 0.02
+                            },
+                            playbackBufferMin: 0.5,
+                            enabled: true,
+                            mode: "liveCatchupModeDefault"
+                          }
+                    }
+                });
+
+                player.on(dashjs.MediaPlayer.events.PLAYBACK_NOT_ALLOWED, function (data) {
+                    console.log('Playback did not start due to auto play restrictions. Muting audio and reloading');
+                    video.muted = true;
+                    player.initialize(video, url, true);
+
+                });
+
+                player.initialize(video, url, true);
+
+                var controlbar = new ControlBar(player, true);
+                controlbar.initialize();
+
+
+
+                player.on(dashjs.MediaPlayer.events["PLAYBACK_ENDED"], function () {
+                    clearInterval(eventPoller);
+                    clearInterval(bitrateCalculator);
+                });
+
+                var eventPoller = setInterval(function () {
+                    var streamInfo = player.getActiveStream().getStreamInfo();
+                    var dashMetrics = player.getDashMetrics();
+                    var dashAdapter = player.getDashAdapter();
+
+                    if (dashMetrics && streamInfo) {
+                        const periodIdx = streamInfo.index;
+                        var repSwitch = dashMetrics.getCurrentRepresentationSwitch('video', true);
+                        var bufferLevel = dashMetrics.getCurrentBufferLevel('video', true);
+                        var DVRInfo = dashMetrics.getCurrentDVRInfo('video', true);
+                        var droppedFrames = dashMetrics.getCurrentDroppedFrames();
+                        var bitrate = repSwitch ? Math.round(dashAdapter.getBandwidthForRepresentation(repSwitch.to, periodIdx) / 1000) : NaN;
+                        var adaptation = dashAdapter.getAdaptationForType(periodIdx, 'video', streamInfo);
+                        var currentRep = adaptation.Representation_asArray.find(function (rep) {
+                            return rep.id === repSwitch.to
+                        })
+                        var frameRate = currentRep.frameRate;
+                        var resolution = currentRep.width + 'x' + currentRep.height;
+                        var codec = dashAdapter.getCodec(adaptation, currentRep, false);
+                        document.getElementById('bufferLevel').innerText = bufferLevel + " secs";
+                        document.getElementById('DVRInfo').innerText = JSON.stringify(DVRInfo);
+                        document.getElementById('codec').innerText = codec;
+                        document.getElementById('framerate').innerText = frameRate + " fps";
+                        document.getElementById('droppedFrames').innerText = droppedFrames["droppedFrames"];
+                        document.getElementById('reportedBitrate').innerText = bitrate + " Kbps";
+                        document.getElementById('resolution').innerText = resolution;
+                    }
+                }, 200);
+
+                if (video.webkitVideoDecodedByteCount !== undefined) {
+                    var lastDecodedByteCount = 0;
+                    const bitrateInterval = 5;
+                    var bitrateCalculator = setInterval(function () {
+                        var calculatedBitrate = (((video.webkitVideoDecodedByteCount - lastDecodedByteCount) / 1000) * 8) / bitrateInterval;
+                        document.getElementById('calculatedBitrate').innerText = Math.round(calculatedBitrate) + " Kbps";
+                        lastDecodedByteCount = video.webkitVideoDecodedByteCount;
+                    }, bitrateInterval * 1000);
+                } else {
+                    document.getElementById('chrome-only').style.display = "none";
+                }
+            })();
+        </script>
     </body>
 </html>
