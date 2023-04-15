@@ -7,14 +7,13 @@
             body {
                 background-color: #282634;
             }
-            video {
-                max-width: 100%;
-                max-height: 100%;
-            }
             .metrics {
                 color: #F8F8F2;
                 font-family: monospace;
                 max-width: 40%;
+            }
+            video {
+                width: 100%;
             }
         </style>
         <link rel="stylesheet" href="controlbar.css">
@@ -115,7 +114,7 @@
                     streaming: {
                         delay: {
                             useSuggestedPresentationDelay: false,
-                            liveDelay: 2
+                            liveDelay: 1
                         },
                         liveCatchup: {
                         maxDrift: 0,
@@ -165,7 +164,6 @@
                     var streamInfo = player.getActiveStream().getStreamInfo();
                     var dashMetrics = player.getDashMetrics();
                     var dashAdapter = player.getDashAdapter();
-
                     if (dashMetrics && streamInfo) {
                         const periodIdx = streamInfo.index;
                         var repSwitch = dashMetrics.getCurrentRepresentationSwitch('video', true);
